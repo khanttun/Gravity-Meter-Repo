@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravity Meter - Soil Moisture</title>
+    <style>
+        :root {
+            --primary-bg: #1a1a1a;
+            --text-color: #ffffff;
+            --meter-bg: #333;
+            --meter-fill: #4caf50;
+            --water-btn: #2196f3;
+            --water-btn-hover: #1976d2;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin-bottom: 2rem;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        #gravity-meter-container {
+            position: relative;
+            width: 100px;
+            height: 400px;
+            background-color: var(--meter-bg);
+            border-radius: 50px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 2px solid #555;
+        }
+
+        #gravity-icon {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            left: 10px;
+            /* Start at top (100% moisture) */
+            top: 10px; 
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%234caf50"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>');
+            background-size: cover;
+            transition: top 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            filter: drop-shadow(0 0 5px rgba(76, 175, 80, 0.6));
+        }
+
+        #moisture-level {
+            margin-top: 1rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        #water-btn {
+            margin-top: 2rem;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background-color: var(--water-btn);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(33, 150, 243, 0.4);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
+        }
+
+        #water-btn:hover {
+            background-color: var(--water-btn-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(33, 150, 243, 0.6);
+        }
+
+        #water-btn:active {
+            transform: translateY(1px);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #f44336;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .connected {
+            background-color: #4caf50;
+        }
+        
+    </style>
+</head>
+<body>
+
+    <h1>GRAVITY METER</h1>
+
+    <div id="gravity-meter-container">
+        <div id="gravity-icon"></div>
+    </div>
+
+    <div id="moisture-level">Moisture: <span id="moisture-text">--</span>%</div>
+
+    <button id="water-btn">WATER</button>
+    
+    <div style="margin-top: 20px; font-size: 0.8rem; color: #888;">
+        <span id="connection-status" class="status-dot"></span> <span id="status-text">Disconnected</span>
+    </div>
+
+    <script>
+        const icon = document.getElementById('gravity-icon');
+        const moistureText = document.getElementById('moisture-text');
+        const waterBtn = document.getElementById('water-btn');
+        const statusDot = document.getElementById('connection-status');
+        const statusText = document.getElementById('status-text');
+
+        let ws;
+
+        function connect() {
+            // Use current host for WebSocket connection
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`;
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                statusDot.classList.add('connected');
+                statusText.textContent = 'Connected';
+                console.log('Connected to server');
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'moisture') {
+                        updateMeter(data.value);
+                    }
+                } catch (e) {
+                    console.error('Error parsing message:', e);
+                }
+            };
+
+            ws.onclose = () => {
+                statusDot.classList.remove('connected');
+                statusText.textContent = 'Disconnected - Reconnecting...';
+                setTimeout(connect, 3000);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket Error:', error);
+                ws.close();
+            };
+        }
+
+        function updateMeter(percentage) {
+            // Validate percentage
+            percentage = Math.max(0, Math.min(100, percentage));
+            
+            moistureText.textContent = percentage;
+
+            // Calculate position
+            // 100% moisture -> top: 10px
+            // 0% moisture -> top: (container height - icon height - 10px) = 400 - 80 - 10 = 310px
+            
+            const maxTop = 310;
+            const minTop = 10;
+            const range = maxTop - minTop;
+            
+            // Invert logic: 100% moisture is top (minTop), 0% is bottom (maxTop)
+            // So higher percentage -> lower top value
+            const currentTop = maxTop - ((percentage / 100) * range);
+            
+            icon.style.top = `${currentTop}px`;
+            
+            // Change color based on level?
+            if (percentage < 30) {
+               // Could add warning classes here
+            }
+        }
+
+        waterBtn.addEventListener('click', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending water command');
+                ws.send(JSON.stringify({ type: 'water' }));
+                
+                // Optimistic UI update (optional, server should confirm)
+                // updateMeter(100); 
+            }
+        });
+
+        // Initial connection
+        connect();
+
+    </script>
+</body>
+</html>
